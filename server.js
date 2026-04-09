@@ -1,5 +1,28 @@
+import express from "express";
+import cors from "cors";
+import OpenAI from "openai";
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// 🔑 CONFIGURA TU API KEY
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+// ✅ RUTA PRINCIPAL (YA NO SALE ERROR)
+app.get("/", (req, res) => {
+  res.send("✅ Backend Nexu funcionando correctamente");
+});
+
+// 🧠 RUTA DE IA
 app.post("/analyze", async (req, res) => {
   const { text } = req.body;
+
+  if (!text) {
+    return res.status(400).json({ error: "Falta el texto" });
+  }
 
   const prompt = `
 Eres un médico profesional.
@@ -38,12 +61,37 @@ ${text}
       ]
     });
 
-    const result = JSON.parse(response.choices[0].message.content);
+    const content = response.choices[0].message.content;
+
+    let result;
+
+    try {
+      result = JSON.parse(content);
+    } catch {
+      // 🔥 Si la IA responde mal, fallback seguro
+      result = {
+        riesgo: "medio",
+        descripcion: "No se pudo interpretar completamente la respuesta.",
+        posible_causa: "Síntomas no claros.",
+        recomendacion: "Consulta a un profesional de salud."
+      };
+    }
 
     res.json(result);
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error en IA" });
+    console.error("Error IA:", error);
+
+    res.status(500).json({
+      error: "Error en el análisis",
+      detalle: error.message
+    });
   }
+});
+
+// 🚀 PUERTO
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Servidor corriendo en puerto ${PORT}`);
 });
