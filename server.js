@@ -1,22 +1,3 @@
-import express from "express";
-import cors from "cors";
-import OpenAI from "openai";
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-// 🔑 CONFIGURA TU API KEY
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
-// ✅ RUTA PRINCIPAL (YA NO SALE ERROR)
-app.get("/", (req, res) => {
-  res.send("✅ Backend Nexu funcionando correctamente");
-});
-
-// 🧠 RUTA DE IA
 app.post("/analyze", async (req, res) => {
   const { text } = req.body;
 
@@ -24,31 +5,55 @@ app.post("/analyze", async (req, res) => {
     return res.status(400).json({ error: "Falta el texto" });
   }
 
+  // 🔴 REGLAS MÉDICAS CRÍTICAS (ANTES DE IA)
+  const dangerKeywords = [
+    "hemorragia",
+    "sangrado fuerte",
+    "no para de sangrar",
+    "convulsiones",
+    "no puede respirar",
+    "dolor en el pecho",
+    "desmayo",
+    "perdida de conciencia"
+  ];
+
+  const isHighRisk = dangerKeywords.some(k =>
+    text.toLowerCase().includes(k)
+  );
+
+  if (isHighRisk) {
+    return res.json({
+      riesgo: "alto",
+      descripcion: "Los síntomas indican una posible urgencia médica.",
+      preguntas: "¿Desde cuándo ocurre y cuánto sangrado has tenido?"
+    });
+  }
+
+  // 🧠 PROMPT MÉDICO PROFESIONAL
   const prompt = `
-Eres un médico profesional en una consulta interactiva.
+Eres un médico clínico experto en triage.
 
-Estás hablando con un paciente.
+Evalúa los síntomas como en urgencias reales.
 
-Debes:
-1. Analizar síntomas
-2. Evaluar riesgo (bajo, medio, alto)
-3. Dar una breve explicación
-4. Hacer UNA pregunta para continuar el diagnóstico
+Clasificación:
+- alto → riesgo vital o urgente
+- medio → requiere atención médica
+- bajo → leve
 
-Reglas:
-- Si detectas peligro → riesgo alto
-- Sé claro y humano
-- Haz solo UNA pregunta a la vez
+IMPORTANTE:
+- Sangrado abundante = ALTO
+- Mareo + sangrado = ALTO
+- No minimizar síntomas
 
 Responde SOLO en JSON:
 
 {
-  "riesgo": "",
-  "descripcion": "",
-  "preguntas": ""
+  "riesgo": "alto | medio | bajo",
+  "descripcion": "explicación médica clara",
+  "preguntas": "una pregunta clave para continuar"
 }
 
-Síntomas:
+Paciente:
 ${text}
 `;
 
@@ -57,7 +62,8 @@ ${text}
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: prompt }
-      ]
+      ],
+      temperature: 0.3
     });
 
     const content = response.choices[0].message.content;
@@ -67,12 +73,10 @@ ${text}
     try {
       result = JSON.parse(content);
     } catch {
-      // 🔥 Si la IA responde mal, fallback seguro
       result = {
         riesgo: "medio",
-        descripcion: "No se pudo interpretar completamente la respuesta.",
-        posible_causa: "Síntomas no claros.",
-        recomendacion: "Consulta a un profesional de salud."
+        descripcion: "No se pudo interpretar correctamente.",
+        preguntas: "¿Puedes dar más detalles?"
       };
     }
 
@@ -86,11 +90,4 @@ ${text}
       detalle: error.message
     });
   }
-});
-
-// 🚀 PUERTO
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en puerto ${PORT}`);
 });
