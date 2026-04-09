@@ -1,61 +1,52 @@
 import express from "express";
 import cors from "cors";
-import fetch from "node-fetch";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ Ruta base
-app.get("/", (req, res) => {
-  res.send("✅ Backend Nexu funcionando correctamente");
-});
+const API_KEY = process.env.GEMINI_API_KEY;
 
-// 🧠 IA MÉDICA (GEMINI)
-app.post("/analyze", async (req, res) => {
-  const { text } = req.body;
-
-  if (!text) {
-    return res.status(400).json({ error: "Falta el texto" });
+// 🔥 FUNCIÓN PARA EXTRAER TEXTO SEGURO
+function extractText(data) {
+  try {
+    return data.candidates[0].content.parts
+      .map(p => p.text)
+      .join("");
+  } catch {
+    return null;
   }
+}
 
-  const prompt = `
-Actúa como un médico clínico con experiencia en diagnóstico inicial.
+// 🔥 RUTA PRINCIPAL
+app.post("/analyze", async (req, res) => {
+  try {
+    const { text } = req.body;
 
-Un paciente reporta los siguientes síntomas:
+    const prompt = `
+Eres un asistente médico inteligente.
 
-"${text}"
-
-Tu tarea es hacer un PRE-DIAGNÓSTICO clínico inicial.
-
-Evalúa:
-
-1. Nivel de riesgo (bajo, medio, alto)
-2. Explicación médica clara (no genérica)
-3. Posible causa basada en síntomas
-4. Recomendación concreta (qué hacer realmente)
-5. UNA pregunta clave para continuar diagnóstico
-
-IMPORTANTE:
-- NO des respuestas genéricas
-- NO digas "consulta médica recomendada" sin contexto
-- Sé específico y realista
-- Usa lenguaje médico simple pero profesional
-
-Responde SOLO en JSON válido:
+Analiza los síntomas del usuario y responde en JSON EXACTO con esta estructura:
 
 {
-  "riesgo": "",
-  "descripcion": "",
-  "posible_causa": "",
-  "recomendacion": "",
-  "preguntas": ""
+  "riesgo": "bajo | medio | alto",
+  "descripcion": "Explicación clara y profesional del posible problema",
+  "posible_causa": "Posibles causas médicas realistas",
+  "recomendacion": "Qué debe hacer el paciente",
+  "preguntas": "Una pregunta de seguimiento útil"
 }
+
+IMPORTANTE:
+- Responde SOLO JSON
+- No agregues texto extra
+- Sé específico y profesional
+
+Síntomas:
+${text}
 `;
 
-  try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
       {
         method: "POST",
         headers: {
@@ -73,46 +64,49 @@ Responde SOLO en JSON válido:
 
     const data = await response.json();
 
-    let textResponse =
-      data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    console.log("🔥 RAW GEMINI:", JSON.stringify(data, null, 2));
 
-    // 🔥 Limpieza por si Gemini mete ```json
-    textResponse = textResponse
+    const rawText = extractText(data);
+
+    if (!rawText) {
+      throw new Error("Gemini no devolvió texto");
+    }
+
+    // 🔥 LIMPIAR TEXTO (por si viene con ```json)
+    const cleaned = rawText
       .replace(/```json/g, "")
       .replace(/```/g, "")
       .trim();
 
-    let result;
+    let json;
 
     try {
-      result = JSON.parse(textResponse);
+      json = JSON.parse(cleaned);
     } catch (err) {
-      console.log("⚠️ JSON inválido, usando fallback");
-
-      result = {
-        riesgo: "medio",
-        descripcion: textResponse || "No se pudo generar descripción",
-        posible_causa: "No especificado",
-        recomendacion: "Consulta médica recomendada",
-        preguntas: "¿Desde cuándo tienes los síntomas?"
-      };
+      console.log("❌ Error parseando JSON:", cleaned);
+      throw err;
     }
 
-    res.json(result);
+    res.json(json);
 
   } catch (error) {
-    console.error("❌ Error en servidor:", error);
+    console.error("❌ ERROR:", error);
 
-    res.status(500).json({
-      error: "Error en el análisis",
-      detalle: error.message
+    res.json({
+      riesgo: "medio",
+      descripcion: "No se pudo generar un análisis detallado",
+      posible_causa: "Información insuficiente",
+      recomendacion: "Consulta médica recomendada",
+      preguntas: "¿Puedes describir mejor tus síntomas?"
     });
   }
 });
 
-// 🚀 Puerto
-const PORT = process.env.PORT || 3000;
+// 🔥 TEST
+app.get("/", (req, res) => {
+  res.send("✅ Backend Nexu funcionando correctamente");
+});
 
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en puerto ${PORT}`);
+app.listen(3000, () => {
+  console.log("Servidor corriendo en puerto 3000");
 });
