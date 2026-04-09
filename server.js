@@ -5,47 +5,30 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
-
-app.get("/", (req, res) => {
-  res.send("✅ Backend Nexu funcionando correctamente");
-});
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 app.post("/analyze", async (req, res) => {
   try {
     const { text } = req.body;
 
-    if (!text) {
-      return res.json({ error: "No se recibió texto" });
-    }
-
     const prompt = `
-Eres un asistente médico inteligente.
+Eres un médico profesional.
 
-Analiza los síntomas del usuario y responde SOLO en JSON.
+Analiza estos síntomas: "${text}"
 
-REGLAS:
-- NO digas "no se pudo"
-- SIEMPRE da un posible diagnóstico
-- Sé claro y útil
-- Usa lenguaje médico simple
-
-Formato:
+Responde SOLO en JSON así:
 
 {
   "riesgo": "bajo | medio | alto",
-  "descripcion": "explicación clara",
-  "posible_causa": "causa probable",
+  "descripcion": "explicación médica clara",
+  "posible_causa": "posibles enfermedades",
   "recomendacion": "qué hacer",
-  "preguntas": "pregunta de seguimiento"
+  "preguntas": "pregunta para el paciente"
 }
-
-Síntomas:
-${text}
 `;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
@@ -63,48 +46,44 @@ ${text}
 
     const data = await response.json();
 
-    // 🔥 Obtener texto completo de Gemini
-    const rawText =
-      data.candidates?.[0]?.content?.parts?.map(p => p.text).join("") || "";
+    console.log("GEMINI RAW:", JSON.stringify(data, null, 2));
 
-    console.log("🧠 Gemini RAW:", rawText);
+    const textResponse =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    let json;
-
-    try {
-      // 🔥 limpiar basura tipo ```json
-      const cleaned = rawText
-        .replace(/```json/g, "")
-        .replace(/```/g, "")
-        .trim();
-
-      json = JSON.parse(cleaned);
-
-    } catch (e) {
-      console.log("❌ Error parsing JSON:", rawText);
-
-      // 🔥 fallback INTELIGENTE (usa lo que dijo Gemini)
-      json = {
+    if (!textResponse) {
+      return res.json({
         riesgo: "medio",
-        descripcion: rawText || "Posible condición médica detectada",
-        posible_causa: "Análisis basado en síntomas proporcionados",
-        recomendacion: "Se recomienda consultar a un médico",
-        preguntas: "¿Tienes otros síntomas adicionales?"
-      };
+        descripcion: "Error al obtener respuesta de IA",
+        posible_causa: "API no respondió correctamente",
+        recomendacion: "Revisar servidor",
+        preguntas: "¿Puedes intentar nuevamente?"
+      });
     }
 
-    res.json(json);
+    // Limpia texto (por si viene con ```json)
+    const clean = textResponse.replace(/```json|```/g, "").trim();
+
+    const parsed = JSON.parse(clean);
+
+    res.json(parsed);
 
   } catch (error) {
-    console.error(error);
+    console.error("ERROR:", error);
 
     res.json({
-      error: "Error en el análisis",
-      detalle: error.message
+      riesgo: "medio",
+      descripcion: "Error interno del servidor",
+      posible_causa: "Fallo en backend",
+      recomendacion: "Intentar de nuevo",
+      preguntas: "¿Puedes describir mejor los síntomas?"
     });
   }
 });
 
-app.listen(PORT, () => {
-  console.log("🚀 Servidor corriendo en puerto " + PORT);
+app.get("/", (req, res) => {
+  res.send("Servidor funcionando 🚀");
 });
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Servidor corriendo en puerto", PORT));
