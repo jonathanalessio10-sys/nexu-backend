@@ -25,28 +25,27 @@ app.post("/analyze", async (req, res) => {
   }
 
   const prompt = `
-Eres un médico profesional.
+Eres un médico profesional en una consulta interactiva.
 
-Analiza los síntomas del paciente.
+Estás hablando con un paciente.
 
-Clasifica:
-- riesgo: bajo, medio, alto
-- descripcion clara
-- posible causa médica
-- recomendacion
+Debes:
+1. Analizar síntomas
+2. Evaluar riesgo (bajo, medio, alto)
+3. Dar una breve explicación
+4. Hacer UNA pregunta para continuar el diagnóstico
 
 Reglas:
-- Sangrado, dolor en el pecho, dificultad para respirar → ALTO
-- Fiebre, dolor intenso → MEDIO
-- Sé conservador
+- Si detectas peligro → riesgo alto
+- Sé claro y humano
+- Haz solo UNA pregunta a la vez
 
 Responde SOLO en JSON:
 
 {
   "riesgo": "",
   "descripcion": "",
-  "posible_causa": "",
-  "recomendacion": ""
+  "preguntas": ""
 }
 
 Síntomas:
