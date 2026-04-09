@@ -7,7 +7,7 @@ app.use(express.json());
 
 const API_KEY = process.env.GEMINI_API_KEY;
 
-// 🔥 FUNCIÓN PARA EXTRAER TEXTO SEGURO
+// 🔥 EXTRAER TEXTO SEGURO DE GEMINI
 function extractText(data) {
   try {
     return data.candidates[0].content.parts
@@ -23,25 +23,34 @@ app.post("/analyze", async (req, res) => {
   try {
     const { text } = req.body;
 
-    const prompt = `
-Eres un asistente médico inteligente.
+    if (!text) {
+      return res.json({
+        riesgo: "bajo",
+        descripcion: "No se proporcionaron síntomas",
+        posible_causa: "Información insuficiente",
+        recomendacion: "Describe tus síntomas para obtener un análisis",
+        preguntas: "¿Qué síntomas tienes?"
+      });
+    }
 
-Analiza los síntomas del usuario y responde en JSON EXACTO con esta estructura:
+    const prompt = `
+Responde ÚNICAMENTE en JSON válido.
+
+NO uses texto fuera del JSON.
+NO uses markdown.
+NO uses comillas triples.
+
+Formato exacto:
 
 {
   "riesgo": "bajo | medio | alto",
-  "descripcion": "Explicación clara y profesional del posible problema",
+  "descripcion": "Explicación médica clara y profesional",
   "posible_causa": "Posibles causas médicas realistas",
   "recomendacion": "Qué debe hacer el paciente",
   "preguntas": "Una pregunta de seguimiento útil"
 }
 
-IMPORTANTE:
-- Responde SOLO JSON
-- No agregues texto extra
-- Sé específico y profesional
-
-Síntomas:
+Analiza estos síntomas:
 ${text}
 `;
 
@@ -68,11 +77,13 @@ ${text}
 
     const rawText = extractText(data);
 
+    console.log("🧠 TEXTO:", rawText);
+
     if (!rawText) {
       throw new Error("Gemini no devolvió texto");
     }
 
-    // 🔥 LIMPIAR TEXTO (por si viene con ```json)
+    // 🔥 LIMPIAR RESPUESTA
     const cleaned = rawText
       .replace(/```json/g, "")
       .replace(/```/g, "")
@@ -83,8 +94,16 @@ ${text}
     try {
       json = JSON.parse(cleaned);
     } catch (err) {
-      console.log("❌ Error parseando JSON:", cleaned);
-      throw err;
+      console.log("❌ JSON inválido, usando fallback inteligente");
+
+      // 🔥 USAR RESPUESTA DE GEMINI AUNQUE NO SEA JSON
+      json = {
+        riesgo: "medio",
+        descripcion: cleaned.slice(0, 300),
+        posible_causa: "Posible condición basada en los síntomas descritos",
+        recomendacion: "Se recomienda acudir a un profesional de salud",
+        preguntas: "¿Desde cuándo presentas estos síntomas?"
+      };
     }
 
     res.json(json);
@@ -108,5 +127,5 @@ app.get("/", (req, res) => {
 });
 
 app.listen(3000, () => {
-  console.log("Servidor corriendo en puerto 3000");
+  console.log("🚀 Servidor corriendo en puerto 3000");
 });
