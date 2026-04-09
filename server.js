@@ -7,28 +7,38 @@ app.use(express.json());
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
+// Endpoint principal
 app.post("/analyze", async (req, res) => {
   try {
     const { text } = req.body;
 
+    if (!text) {
+      return res.status(400).json({
+        error: "Falta el texto"
+      });
+    }
+
     const prompt = `
 Eres un médico profesional.
 
-Analiza estos síntomas: "${text}"
+Analiza los siguientes síntomas del paciente:
+"${text}"
 
-Responde SOLO en JSON así:
+Da un prediagnóstico claro y útil.
+
+Responde SOLO en JSON válido con este formato:
 
 {
   "riesgo": "bajo | medio | alto",
-  "descripcion": "explicación médica clara",
-  "posible_causa": "posibles enfermedades",
-  "recomendacion": "qué hacer",
-  "preguntas": "pregunta para el paciente"
+  "descripcion": "explicación médica clara y detallada",
+  "posible_causa": "posibles enfermedades o causas",
+  "recomendacion": "qué debe hacer el paciente",
+  "preguntas": "pregunta de seguimiento"
 }
 `;
 
     const response = await fetch(
-     https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
@@ -46,44 +56,67 @@ Responde SOLO en JSON así:
 
     const data = await response.json();
 
-    console.log("GEMINI RAW:", JSON.stringify(data, null, 2));
+    // 🔍 LOG PARA DEBUG (muy importante)
+    console.log("GEMINI RESPONSE:", JSON.stringify(data, null, 2));
 
     const textResponse =
       data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
+    // ❌ Si Gemini no respondió bien
     if (!textResponse) {
       return res.json({
         riesgo: "medio",
-        descripcion: "Error al obtener respuesta de IA",
-        posible_causa: "API no respondió correctamente",
-        recomendacion: "Revisar servidor",
+        descripcion: "No se pudo generar respuesta de IA",
+        posible_causa: "Error en Gemini o API KEY",
+        recomendacion: "Verifica configuración del servidor",
         preguntas: "¿Puedes intentar nuevamente?"
       });
     }
 
-    // Limpia texto (por si viene con ```json)
-    const clean = textResponse.replace(/```json|```/g, "").trim();
+    // 🧹 Limpia formato (quita ```json)
+    const cleanText = textResponse
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
 
-    const parsed = JSON.parse(clean);
+    let parsed;
+
+    try {
+      parsed = JSON.parse(cleanText);
+    } catch (err) {
+      console.error("ERROR PARSE:", err);
+
+      return res.json({
+        riesgo: "medio",
+        descripcion: cleanText, // muestra lo que dijo Gemini
+        posible_causa: "Respuesta no estructurada",
+        recomendacion: "Revisar formato JSON",
+        preguntas: "¿Puedes intentar nuevamente?"
+      });
+    }
 
     res.json(parsed);
 
   } catch (error) {
-    console.error("ERROR:", error);
+    console.error("ERROR GENERAL:", error);
 
-    res.json({
+    res.status(500).json({
       riesgo: "medio",
       descripcion: "Error interno del servidor",
       posible_causa: "Fallo en backend",
-      recomendacion: "Intentar de nuevo",
+      recomendacion: "Intentar más tarde",
       preguntas: "¿Puedes describir mejor los síntomas?"
     });
   }
 });
 
+// Ruta de prueba
 app.get("/", (req, res) => {
   res.send("Servidor funcionando 🚀");
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Servidor corriendo en puerto", PORT));
+
+app.listen(PORT, () => {
+  console.log(`Servidor corriendo en puerto ${PORT}`);
+});
