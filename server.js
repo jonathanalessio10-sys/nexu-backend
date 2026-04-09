@@ -1,44 +1,41 @@
 import express from "express";
 import cors from "cors";
+import fetch from "node-fetch";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const API_KEY = process.env.GEMINI_API_KEY;
 
-// Endpoint principal
 app.post("/analyze", async (req, res) => {
   try {
     const { text } = req.body;
 
-    if (!text) {
-      return res.status(400).json({
-        error: "Falta el texto"
-      });
-    }
+    console.log("INPUT:", text);
 
     const prompt = `
-Eres un médico profesional.
+Eres un asistente médico inteligente.
 
-Analiza los siguientes síntomas del paciente:
+Analiza los siguientes síntomas:
 "${text}"
 
-Da un prediagnóstico claro y útil.
-
-Responde SOLO en JSON válido con este formato:
+Devuelve un JSON con este formato:
 
 {
   "riesgo": "bajo | medio | alto",
-  "descripcion": "explicación médica clara y detallada",
-  "posible_causa": "posibles enfermedades o causas",
-  "recomendacion": "qué debe hacer el paciente",
-  "preguntas": "pregunta de seguimiento"
+  "descripcion": "posible diagnóstico claro y breve",
+  "posible_causa": "causa probable",
+  "recomendacion": "qué hacer",
+  "preguntas": "pregunta de seguimiento útil"
 }
 `;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${API_KEY}`,
       {
         method: "POST",
         headers: {
@@ -56,67 +53,39 @@ Responde SOLO en JSON válido con este formato:
 
     const data = await response.json();
 
-    // 🔍 LOG PARA DEBUG (muy importante)
-    console.log("GEMINI RESPONSE:", JSON.stringify(data, null, 2));
+    console.log("GEMINI RAW:", JSON.stringify(data, null, 2));
 
     const textResponse =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-    // ❌ Si Gemini no respondió bien
     if (!textResponse) {
-      return res.json({
-        riesgo: "medio",
-        descripcion: "No se pudo generar respuesta de IA",
-        posible_causa: "Error en Gemini o API KEY",
-        recomendacion: "Verifica configuración del servidor",
-        preguntas: "¿Puedes intentar nuevamente?"
-      });
+      throw new Error("Sin respuesta de Gemini");
     }
 
-    // 🧹 Limpia formato (quita ```json)
+    // limpiar respuesta (por si viene con ```json)
     const cleanText = textResponse
       .replace(/```json/g, "")
       .replace(/```/g, "")
       .trim();
 
-    let parsed;
+    const json = JSON.parse(cleanText);
 
-    try {
-      parsed = JSON.parse(cleanText);
-    } catch (err) {
-      console.error("ERROR PARSE:", err);
-
-      return res.json({
-        riesgo: "medio",
-        descripcion: cleanText, // muestra lo que dijo Gemini
-        posible_causa: "Respuesta no estructurada",
-        recomendacion: "Revisar formato JSON",
-        preguntas: "¿Puedes intentar nuevamente?"
-      });
-    }
-
-    res.json(parsed);
+    res.json(json);
 
   } catch (error) {
-    console.error("ERROR GENERAL:", error);
+    console.error("ERROR:", error.message);
 
-    res.status(500).json({
+    res.json({
       riesgo: "medio",
-      descripcion: "Error interno del servidor",
-      posible_causa: "Fallo en backend",
-      recomendacion: "Intentar más tarde",
-      preguntas: "¿Puedes describir mejor los síntomas?"
+      descripcion: "Error al obtener respuesta de IA",
+      posible_causa: "Modelo mal configurado o API falló",
+      recomendacion: "Revisar servidor",
+      preguntas: "¿Puedes intentar nuevamente?"
     });
   }
 });
 
-// Ruta de prueba
-app.get("/", (req, res) => {
-  res.send("Servidor funcionando 🚀");
-});
-
-const PORT = process.env.PORT || 3000;
-
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo en puerto ${PORT}`);
+  console.log("Servidor corriendo en puerto", PORT);
 });
