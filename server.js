@@ -6,12 +6,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ RUTA PRINCIPAL
+// ✅ Ruta base
 app.get("/", (req, res) => {
   res.send("✅ Backend Nexu funcionando correctamente");
 });
 
-// 🧠 RUTA DE IA (GEMINI)
+// 🧠 Ruta de análisis con Gemini
 app.post("/analyze", async (req, res) => {
   const { text } = req.body;
 
@@ -22,18 +22,24 @@ app.post("/analyze", async (req, res) => {
   const prompt = `
 Eres un médico profesional.
 
-Analiza estos síntomas:
+Analiza los siguientes síntomas del paciente:
 
 ${text}
 
-Responde SOLO en JSON:
+IMPORTANTE:
+- Responde ÚNICAMENTE en JSON válido
+- NO agregues texto fuera del JSON
+- NO uses markdown
+- NO uses backticks
+
+El JSON debe tener EXACTAMENTE esta estructura:
 
 {
-  "riesgo": "",
-  "descripcion": "",
-  "posible_causa": "",
-  "recomendacion": "",
-  "preguntas": ""
+  "riesgo": "bajo | medio | alto",
+  "descripcion": "explicación clara del problema",
+  "posible_causa": "causa probable",
+  "recomendacion": "qué debe hacer el paciente",
+  "preguntas": "una sola pregunta para continuar diagnóstico"
 }
 `;
 
@@ -57,17 +63,25 @@ Responde SOLO en JSON:
 
     const data = await response.json();
 
-    const textResponse =
+    let textResponse =
       data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+    // 🔥 Limpieza por si Gemini mete ```json
+    textResponse = textResponse
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
 
     let result;
 
     try {
       result = JSON.parse(textResponse);
-    } catch {
+    } catch (err) {
+      console.log("⚠️ JSON inválido, usando fallback");
+
       result = {
         riesgo: "medio",
-        descripcion: textResponse,
+        descripcion: textResponse || "No se pudo generar descripción",
         posible_causa: "No especificado",
         recomendacion: "Consulta médica recomendada",
         preguntas: "¿Desde cuándo tienes los síntomas?"
@@ -77,7 +91,7 @@ Responde SOLO en JSON:
     res.json(result);
 
   } catch (error) {
-    console.error("Error:", error);
+    console.error("❌ Error en servidor:", error);
 
     res.status(500).json({
       error: "Error en el análisis",
@@ -86,7 +100,7 @@ Responde SOLO en JSON:
   }
 });
 
-// 🚀 PUERTO
+// 🚀 Puerto
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
