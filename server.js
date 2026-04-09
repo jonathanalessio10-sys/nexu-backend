@@ -1,23 +1,17 @@
 import express from "express";
 import cors from "cors";
-import OpenAI from "openai";
+import fetch from "node-fetch";
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
-// 🔑 API KEY
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
-// ✅ Ruta de prueba
+// ✅ RUTA PRINCIPAL
 app.get("/", (req, res) => {
   res.send("✅ Backend Nexu funcionando correctamente");
 });
 
-// 🧠 IA MÉDICA
+// 🧠 RUTA DE IA (GEMINI)
 app.post("/analyze", async (req, res) => {
   const { text } = req.body;
 
@@ -25,91 +19,65 @@ app.post("/analyze", async (req, res) => {
     return res.status(400).json({ error: "Falta el texto" });
   }
 
-  // 🔴 REGLAS DE EMERGENCIA (MUY IMPORTANTE)
-  const dangerKeywords = [
-    "hemorragia",
-    "sangrado fuerte",
-    "no para de sangrar",
-    "convulsiones",
-    "no puede respirar",
-    "dolor en el pecho",
-    "desmayo",
-    "perdida de conciencia",
-    "mareo con sangrado"
-  ];
-
-  const isHighRisk = dangerKeywords.some(k =>
-    text.toLowerCase().includes(k)
-  );
-
-  if (isHighRisk) {
-    return res.json({
-      riesgo: "alto",
-      descripcion: "Los síntomas indican una posible urgencia médica.",
-      posible_causa: "Posible hemorragia o condición crítica.",
-      recomendacion: "Acude inmediatamente a un hospital o llama a emergencias.",
-      preguntas: "¿Desde cuándo ocurre el sangrado y es continuo?"
-    });
-  }
-
-  // 🧠 PROMPT MÉDICO COMPLETO
   const prompt = `
-Eres un médico profesional experto en diagnóstico clínico.
+Eres un médico profesional.
 
-Analiza los síntomas del paciente.
+Analiza estos síntomas:
 
-Clasificación:
-- alto → urgencia médica
-- medio → requiere atención médica
-- bajo → leve
+${text}
 
-IMPORTANTE:
-- No minimizar síntomas
-- Sé claro y profesional
-
-Responde SOLO en JSON válido:
+Responde SOLO en JSON:
 
 {
-  "riesgo": "bajo | medio | alto",
-  "descripcion": "explicación médica clara",
-  "posible_causa": "causa probable",
-  "recomendacion": "qué debe hacer el paciente",
-  "preguntas": "una sola pregunta para continuar el diagnóstico"
+  "riesgo": "",
+  "descripcion": "",
+  "posible_causa": "",
+  "recomendacion": "",
+  "preguntas": ""
 }
-
-Paciente:
-${text}
 `;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: prompt }
-      ],
-      temperature: 0.3
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: prompt }]
+            }
+          ]
+        })
+      }
+    );
 
-    const content = response.choices[0].message.content;
+    const data = await response.json();
+
+    const textResponse =
+      data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     let result;
 
     try {
-      result = JSON.parse(content);
+      result = JSON.parse(textResponse);
     } catch {
       result = {
         riesgo: "medio",
-        descripcion: "No se pudo interpretar correctamente la respuesta.",
-        posible_causa: "Información insuficiente.",
-        recomendacion: "Consulta a un médico.",
-        preguntas: "¿Puedes describir mejor tus síntomas?"
+        descripcion: textResponse,
+        posible_causa: "No especificado",
+        recomendacion: "Consulta médica recomendada",
+        preguntas: "¿Desde cuándo tienes los síntomas?"
       };
     }
 
     res.json(result);
 
   } catch (error) {
-    console.error("Error IA:", error);
+    console.error("Error:", error);
 
     res.status(500).json({
       error: "Error en el análisis",
@@ -122,5 +90,5 @@ ${text}
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`🔥 Servidor corriendo en puerto ${PORT}`);
+  console.log(`Servidor corriendo en puerto ${PORT}`);
 });
