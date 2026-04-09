@@ -1,3 +1,25 @@
+import express from "express";
+import cors from "cors";
+import OpenAI from "openai";
+
+// ✅ Crear app PRIMERO
+const app = express();
+
+// ✅ Middlewares
+app.use(cors());
+app.use(express.json());
+
+// ✅ OpenAI
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+// ✅ Ruta raíz
+app.get("/", (req, res) => {
+  res.send("✅ Backend Nexu funcionando correctamente");
+});
+
+// 🧠 Ruta IA
 app.post("/analyze", async (req, res) => {
   const { text } = req.body;
 
@@ -5,7 +27,7 @@ app.post("/analyze", async (req, res) => {
     return res.status(400).json({ error: "Falta el texto" });
   }
 
-  // 🔴 REGLAS MÉDICAS CRÍTICAS (ANTES DE IA)
+  // 🔴 REGLAS MÉDICAS CRÍTICAS
   const dangerKeywords = [
     "hemorragia",
     "sangrado fuerte",
@@ -14,7 +36,8 @@ app.post("/analyze", async (req, res) => {
     "no puede respirar",
     "dolor en el pecho",
     "desmayo",
-    "perdida de conciencia"
+    "perdida de conciencia",
+    "mareo con sangrado"
   ];
 
   const isHighRisk = dangerKeywords.some(k =>
@@ -29,28 +52,22 @@ app.post("/analyze", async (req, res) => {
     });
   }
 
-  // 🧠 PROMPT MÉDICO PROFESIONAL
+  // 🧠 IA
   const prompt = `
-Eres un médico clínico experto en triage.
+Eres un médico experto en urgencias.
 
-Evalúa los síntomas como en urgencias reales.
+Evalúa los síntomas.
 
-Clasificación:
-- alto → riesgo vital o urgente
-- medio → requiere atención médica
-- bajo → leve
-
-IMPORTANTE:
-- Sangrado abundante = ALTO
-- Mareo + sangrado = ALTO
+Reglas:
+- Sangrado + mareo = ALTO
 - No minimizar síntomas
 
 Responde SOLO en JSON:
 
 {
-  "riesgo": "alto | medio | bajo",
-  "descripcion": "explicación médica clara",
-  "preguntas": "una pregunta clave para continuar"
+  "riesgo": "",
+  "descripcion": "",
+  "preguntas": ""
 }
 
 Paciente:
@@ -75,7 +92,7 @@ ${text}
     } catch {
       result = {
         riesgo: "medio",
-        descripcion: "No se pudo interpretar correctamente.",
+        descripcion: "No se pudo interpretar.",
         preguntas: "¿Puedes dar más detalles?"
       };
     }
@@ -90,4 +107,11 @@ ${text}
       detalle: error.message
     });
   }
+});
+
+// 🚀 Puerto
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`🔥 Servidor corriendo en puerto ${PORT}`);
 });
