@@ -11,7 +11,7 @@ app.get("/", (req, res) => {
   res.send("✅ Backend Nexu funcionando correctamente");
 });
 
-// 🧠 Ruta de análisis con Gemini
+// 🧠 IA MÉDICA (GEMINI)
 app.post("/analyze", async (req, res) => {
   const { text } = req.body;
 
@@ -20,32 +20,42 @@ app.post("/analyze", async (req, res) => {
   }
 
   const prompt = `
-Eres un médico profesional.
+Actúa como un médico clínico con experiencia en diagnóstico inicial.
 
-Analiza los siguientes síntomas del paciente:
+Un paciente reporta los siguientes síntomas:
 
-${text}
+"${text}"
+
+Tu tarea es hacer un PRE-DIAGNÓSTICO clínico inicial.
+
+Evalúa:
+
+1. Nivel de riesgo (bajo, medio, alto)
+2. Explicación médica clara (no genérica)
+3. Posible causa basada en síntomas
+4. Recomendación concreta (qué hacer realmente)
+5. UNA pregunta clave para continuar diagnóstico
 
 IMPORTANTE:
-- Responde ÚNICAMENTE en JSON válido
-- NO agregues texto fuera del JSON
-- NO uses markdown
-- NO uses backticks
+- NO des respuestas genéricas
+- NO digas "consulta médica recomendada" sin contexto
+- Sé específico y realista
+- Usa lenguaje médico simple pero profesional
 
-El JSON debe tener EXACTAMENTE esta estructura:
+Responde SOLO en JSON válido:
 
 {
-  "riesgo": "bajo | medio | alto",
-  "descripcion": "explicación clara del problema",
-  "posible_causa": "causa probable",
-  "recomendacion": "qué debe hacer el paciente",
-  "preguntas": "una sola pregunta para continuar diagnóstico"
+  "riesgo": "",
+  "descripcion": "",
+  "posible_causa": "",
+  "recomendacion": "",
+  "preguntas": ""
 }
 `;
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
