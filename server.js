@@ -2,24 +2,22 @@ import express from "express";
 import cors from "cors";
 import OpenAI from "openai";
 
-// ✅ Crear app PRIMERO
 const app = express();
 
-// ✅ Middlewares
 app.use(cors());
 app.use(express.json());
 
-// ✅ OpenAI
+// 🔑 API KEY
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// ✅ Ruta raíz
+// ✅ Ruta de prueba
 app.get("/", (req, res) => {
   res.send("✅ Backend Nexu funcionando correctamente");
 });
 
-// 🧠 Ruta IA
+// 🧠 IA MÉDICA
 app.post("/analyze", async (req, res) => {
   const { text } = req.body;
 
@@ -27,7 +25,7 @@ app.post("/analyze", async (req, res) => {
     return res.status(400).json({ error: "Falta el texto" });
   }
 
-  // 🔴 REGLAS MÉDICAS CRÍTICAS
+  // 🔴 REGLAS DE EMERGENCIA (MUY IMPORTANTE)
   const dangerKeywords = [
     "hemorragia",
     "sangrado fuerte",
@@ -48,26 +46,35 @@ app.post("/analyze", async (req, res) => {
     return res.json({
       riesgo: "alto",
       descripcion: "Los síntomas indican una posible urgencia médica.",
-      preguntas: "¿Desde cuándo ocurre y cuánto sangrado has tenido?"
+      posible_causa: "Posible hemorragia o condición crítica.",
+      recomendacion: "Acude inmediatamente a un hospital o llama a emergencias.",
+      preguntas: "¿Desde cuándo ocurre el sangrado y es continuo?"
     });
   }
 
-  // 🧠 IA
+  // 🧠 PROMPT MÉDICO COMPLETO
   const prompt = `
-Eres un médico experto en urgencias.
+Eres un médico profesional experto en diagnóstico clínico.
 
-Evalúa los síntomas.
+Analiza los síntomas del paciente.
 
-Reglas:
-- Sangrado + mareo = ALTO
+Clasificación:
+- alto → urgencia médica
+- medio → requiere atención médica
+- bajo → leve
+
+IMPORTANTE:
 - No minimizar síntomas
+- Sé claro y profesional
 
-Responde SOLO en JSON:
+Responde SOLO en JSON válido:
 
 {
-  "riesgo": "",
-  "descripcion": "",
-  "preguntas": ""
+  "riesgo": "bajo | medio | alto",
+  "descripcion": "explicación médica clara",
+  "posible_causa": "causa probable",
+  "recomendacion": "qué debe hacer el paciente",
+  "preguntas": "una sola pregunta para continuar el diagnóstico"
 }
 
 Paciente:
@@ -92,8 +99,10 @@ ${text}
     } catch {
       result = {
         riesgo: "medio",
-        descripcion: "No se pudo interpretar.",
-        preguntas: "¿Puedes dar más detalles?"
+        descripcion: "No se pudo interpretar correctamente la respuesta.",
+        posible_causa: "Información insuficiente.",
+        recomendacion: "Consulta a un médico.",
+        preguntas: "¿Puedes describir mejor tus síntomas?"
       };
     }
 
@@ -109,7 +118,7 @@ ${text}
   }
 });
 
-// 🚀 Puerto
+// 🚀 PUERTO
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
